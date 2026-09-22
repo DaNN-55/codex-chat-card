@@ -89,12 +89,9 @@
 ```bash
 git clone https://github.com/DaNN-55/codex-chat-card.git \
   ~/.agents/skills/codex-chat-card
-cd ~/.agents/skills/codex-chat-card
-npm ci
-npm run build
 ```
 
-安装后如果没有立即显示，重启一次 Codex。
+安装后如果没有立即显示，重启一次 Codex。首次使用时，Skill 会在安装目录执行 `npm ci --omit=dev --ignore-scripts` 下载锁定的运行依赖，然后继续原来的预览或导出命令；这一步需要网络和一次安装目录写入权限。后续使用不会重复安装，除非 `package-lock.json` 发生变化。
 
 ## 用法
 
@@ -118,13 +115,13 @@ npm run build
 列出当前会话最近 10 轮：
 
 ```bash
-node scripts/dist/cli.js list --current --limit 10
+node scripts/run.mjs list --current --limit 10
 ```
 
 导出最近 3 轮：
 
 ```bash
-node scripts/dist/cli.js export \
+node scripts/run.mjs export \
   --current \
   --select last:3 \
   --content conversation \
@@ -154,6 +151,7 @@ npm test
 
 ```text
 SKILL.md             Skill 工作流和默认行为
+scripts/run.mjs      首次运行依赖初始化和统一命令入口
 scripts/src/         TypeScript 源码
 scripts/dist/        可直接运行的编译产物
 scripts/test/        自动化测试

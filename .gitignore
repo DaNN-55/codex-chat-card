@@ -1,5 +1,6 @@
 .DS_Store
 node_modules/
+.codex-chat-card-runtime-install.lock
 output/
 artifacts/
 docs/adr/

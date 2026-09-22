@@ -2,17 +2,18 @@
 
 所有命令都在 Skill 目录中执行。
 
-## 首次准备
+## 运行入口
 
 ```bash
-npm install
-npm run build
+node scripts/run.mjs <command> [...options]
 ```
+
+首次运行缺少 `node_modules` 时，入口会执行 `npm ci --omit=dev --ignore-scripts` 安装锁定的运行依赖，并在成功后继续原命令。该过程需要网络和 Skill 目录写入权限；后续运行不会重复安装。普通用户不需要执行 `npm run build`。
 
 ## 查看当前对话
 
 ```bash
-node scripts/dist/cli.js list --current --limit 10
+node scripts/run.mjs list --current --limit 10
 ```
 
 列表使用稳定的时间顺序轮次编号，并显示时间戳以及用户和 Codex 消息的简短预览。
@@ -20,17 +21,17 @@ node scripts/dist/cli.js list --current --limit 10
 ## 导出
 
 ```bash
-node scripts/dist/cli.js export --current --select last:3 --output output/chat.png
-node scripts/dist/cli.js export --current --select last:3 --content user --output output/user-only.png
-node scripts/dist/cli.js export --current --select last:3 --content codex --output output/codex-only.png
-node scripts/dist/cli.js export --current --select last:3 --mode branded --output output/chat-branded.png
-node scripts/dist/cli.js export --current --select last:3 --mode minimal --output output/chat-minimal.png
-node scripts/dist/cli.js export --current --select last:3 --mode clean --output output/chat-clean.png
-node scripts/dist/cli.js export --current --select last:3 --mode branded --mockup codex-window --output output/chat-window.png
-node scripts/dist/cli.js export --current --select last:3 --theme codex-ink --output output/chat.png
-node scripts/dist/cli.js export --current --select 2-4 --theme warm-editorial --output output/chat.png
-node scripts/dist/cli.js export --current --select 1,3,6 --theme frosted-indigo --output output/chat.png
-node scripts/dist/cli.js export --current --select last:2 --theme raycast-night --output output/chat.png
+node scripts/run.mjs export --current --select last:3 --output output/chat.png
+node scripts/run.mjs export --current --select last:3 --content user --output output/user-only.png
+node scripts/run.mjs export --current --select last:3 --content codex --output output/codex-only.png
+node scripts/run.mjs export --current --select last:3 --mode branded --output output/chat-branded.png
+node scripts/run.mjs export --current --select last:3 --mode minimal --output output/chat-minimal.png
+node scripts/run.mjs export --current --select last:3 --mode clean --output output/chat-clean.png
+node scripts/run.mjs export --current --select last:3 --mode branded --mockup codex-window --output output/chat-window.png
+node scripts/run.mjs export --current --select last:3 --theme codex-ink --output output/chat.png
+node scripts/run.mjs export --current --select 2-4 --theme warm-editorial --output output/chat.png
+node scripts/run.mjs export --current --select 1,3,6 --theme frosted-indigo --output output/chat.png
+node scripts/run.mjs export --current --select last:2 --theme raycast-night --output output/chat.png
 ```
 
 轮次选择支持 `last:N`、`all`、`2-4` 这类连续范围，以及用英文逗号分隔的编号或范围。
