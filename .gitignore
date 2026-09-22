@@ -2,6 +2,7 @@
 node_modules/
 output/
 artifacts/
+docs/adr/
 .plugin-eval/runs/
 .plugin-eval/benchmark-usage.jsonl
 *.log
