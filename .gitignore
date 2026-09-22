@@ -1,0 +1,7 @@
+.DS_Store
+node_modules/
+output/
+artifacts/
+.plugin-eval/runs/
+.plugin-eval/benchmark-usage.jsonl
+*.log

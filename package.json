@@ -1,0 +1,53 @@
+{
+  "name": "codex-chat-card",
+  "version": "0.1.0",
+  "description": "将选中的 Codex Desktop 对话轮次导出为精美的 PNG 长图或可编辑 SVG。",
+  "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DaNN-55/codex-chat-card.git"
+  },
+  "homepage": "https://github.com/DaNN-55/codex-chat-card#readme",
+  "bugs": {
+    "url": "https://github.com/DaNN-55/codex-chat-card/issues"
+  },
+  "keywords": [
+    "codex",
+    "codex-skill",
+    "conversation",
+    "image-export",
+    "svg",
+    "png"
+  ],
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p scripts/tsconfig.json",
+    "assets:readme": "npm run build && node scripts/generate-readme-assets.mjs",
+    "check": "tsc -p scripts/tsconfig.json --noEmit",
+    "test": "npm run build && node --test scripts/test/*.test.mjs"
+  },
+  "dependencies": {
+    "@fontsource/geist": "^5.3.0",
+    "@fontsource/ibm-plex-mono": "^5.2.6",
+    "@fontsource/noto-emoji": "^5.3.2",
+    "@fontsource/noto-sans-sc": "^5.2.6",
+    "@fontsource/source-serif-4": "^5.2.6",
+    "@resvg/resvg-js": "^2.6.2",
+    "emoji-regex": "^10.6.0",
+    "react": "^19.2.0",
+    "remark-gfm": "^4.0.1",
+    "remark-parse": "^11.0.0",
+    "satori": "^0.18.3",
+    "smol-toml": "^1.8.0",
+    "unified": "^11.0.5"
+  },
+  "devDependencies": {
+    "@types/node": "^24.6.0",
+    "@types/react": "^19.2.2",
+    "typescript": "^5.9.3"
+  }
+}

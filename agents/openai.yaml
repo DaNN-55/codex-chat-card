@@ -1,0 +1,8 @@
+interface:
+  display_name: "Codex 对话卡片"
+  short_description: "选择 Codex 对话轮次并导出精美的 PNG 或 SVG 长图"
+  brand_color: "#82D8C6"
+  default_prompt: "使用 $codex-chat-card 选择当前 Codex 对话中的轮次，并导出为排版精美的长图。"
+
+policy:
+  allow_implicit_invocation: false

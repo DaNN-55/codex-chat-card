@@ -1,0 +1,73 @@
+{
+  "kind": "plugin-eval-benchmark",
+  "schemaVersion": 2,
+  "version": 2,
+  "targetKind": "skill",
+  "targetName": "codex-chat-card",
+  "runner": {
+    "type": "codex-cli",
+    "model": "gpt-5.6-luna",
+    "sandbox": "workspace-write",
+    "approvalPolicy": "never",
+    "extraArgs": []
+  },
+  "workspace": {
+    "sourcePath": "./.plugin-eval/workspace",
+    "setupMode": "copy",
+    "preserve": "on-failure"
+  },
+  "targetProvisioning": {
+    "mode": "isolated-skill-home"
+  },
+  "verifiers": {
+    "commands": [
+      "find output -type f \\( -name '*.png' -o -name '*.svg' \\) -size +0c | grep -q ."
+    ]
+  },
+  "notes": [
+    "All scenarios use a synthetic local Codex JSONL fixture.",
+    "Benchmark means real codex exec runs. There is no simulated dry-run mode."
+  ],
+  "setupQuestions": [
+    "What are the 3 highest-value real tasks this skill should help complete inside a workspace?",
+    "Which scenario is the must-pass end-to-end task for this skill?",
+    "What output should exist on disk if the scenario succeeds?",
+    "Which verification command would tell you the result is actually usable?",
+    "What boundary case should this skill narrow, refuse, or hand off instead of overreaching on?"
+  ],
+  "scenarios": [
+    {
+      "id": "conversation-png",
+      "title": "Export recent complete conversation",
+      "purpose": "Verify the primary long-PNG flow with an explicit local session path.",
+      "userInput": "Use the local Codex skill \"codex-chat-card\". Export the last two completed rounds from session.jsonl as a clean conversation-view PNG with no mockup. Save it as output/conversation.png and report the absolute path.",
+      "successChecklist": [
+        "output/conversation.png exists and is non-empty.",
+        "The export includes both user and final Codex content from the selected rounds.",
+        "The final answer reports the artifact path."
+      ]
+    },
+    {
+      "id": "user-svg",
+      "title": "Export user-only vector card",
+      "purpose": "Verify selection and content view remain independent across presentation options.",
+      "userInput": "Use the local Codex skill \"codex-chat-card\". Export rounds 1 and 3 from session.jsonl as user-only SVG using warm-editorial, minimal mode, and the Codex window mockup. Save it as output/user-only.svg and report the absolute path.",
+      "successChecklist": [
+        "output/user-only.svg exists and is non-empty.",
+        "Only user messages from rounds 1 and 3 are selected.",
+        "The requested theme, mode, and mockup are respected."
+      ]
+    },
+    {
+      "id": "mixed-role-boundary",
+      "title": "Split mixed per-round roles",
+      "purpose": "Verify the skill narrows a request the global content view cannot represent.",
+      "userInput": "Use the local Codex skill \"codex-chat-card\". I want round 1's Codex response and round 2's user message from session.jsonl. Respect the skill boundary by creating separate clean PNG exports at output/round-1-codex.png and output/round-2-user.png instead of pretending this is one global content view.",
+      "successChecklist": [
+        "Both requested PNG files exist and are non-empty.",
+        "Each export contains only its requested role and round.",
+        "The final answer explains why separate exports were used."
+      ]
+    }
+  ]
+}

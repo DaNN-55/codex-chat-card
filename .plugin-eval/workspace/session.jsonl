@@ -1,0 +1,8 @@
+{"timestamp":"2026-09-22T02:00:00.000Z","type":"session_meta","payload":{"id":"codex-chat-card-benchmark"}}
+{"timestamp":"2026-09-22T02:01:00.000Z","type":"event_msg","payload":{"type":"item_completed","turn_id":"turn-1","item":{"type":"UserMessage","content":[{"type":"text","text":"请解释这个导出工具支持哪些格式。"}]}}}
+{"timestamp":"2026-09-22T02:01:10.000Z","type":"event_msg","payload":{"type":"item_completed","turn_id":"turn-1","item":{"type":"AgentMessage","phase":"commentary","content":[{"type":"Text","text":"正在检查。"}]}}}
+{"timestamp":"2026-09-22T02:01:20.000Z","type":"event_msg","payload":{"type":"item_completed","turn_id":"turn-1","item":{"type":"AgentMessage","phase":"final_answer","content":[{"type":"Text","text":"支持 PNG 和 SVG。\n\n- PNG 适合直接分享\n- SVG 适合继续编辑"}]}}}
+{"timestamp":"2026-09-22T02:02:00.000Z","type":"event_msg","payload":{"type":"item_completed","turn_id":"turn-2","item":{"type":"UserMessage","content":[{"type":"text","text":"主题和内容视图可以独立选择吗？"}]}}}
+{"timestamp":"2026-09-22T02:02:20.000Z","type":"event_msg","payload":{"type":"item_completed","turn_id":"turn-2","item":{"type":"AgentMessage","phase":"final_answer","content":[{"type":"Text","text":"可以。主题控制视觉，内容视图控制显示双方、用户或 Codex。✅"}]}}}
+{"timestamp":"2026-09-22T02:03:00.000Z","type":"event_msg","payload":{"type":"item_completed","turn_id":"turn-3","item":{"type":"UserMessage","content":[{"type":"text","text":"给我一个选择最近两轮的命令示例。"}]}}}
+{"timestamp":"2026-09-22T02:03:20.000Z","type":"event_msg","payload":{"type":"item_completed","turn_id":"turn-3","item":{"type":"AgentMessage","phase":"final_answer","content":[{"type":"Text","text":"```bash\nnode scripts/dist/cli.js export --input session.jsonl --select last:2\n```"}]}}}
