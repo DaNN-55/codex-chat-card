@@ -1,3 +1,4 @@
+import { markdownDisplayText } from "./markdown.js";
 function integer(value, label) {
     const parsed = Number(value);
     if (!Number.isInteger(parsed) || parsed < 1)
@@ -31,13 +32,15 @@ export function selectRounds(rounds, expression) {
         }
         indexes.add(integer(token, "round number"));
     }
+    if (indexes.size === 0)
+        throw new Error("Selection cannot be empty.");
     const missing = [...indexes].filter((index) => !rounds.some((round) => round.index === index));
     if (missing.length > 0)
         throw new Error(`Unknown round number(s): ${missing.join(", ")}`);
     return rounds.filter((round) => indexes.has(round.index));
 }
 export function preview(text, length = 72) {
-    const compact = text.replace(/\s+/g, " ").trim();
+    const compact = markdownDisplayText(text).replace(/\s+/g, " ").trim();
     return compact.length <= length
         ? compact
         : `${compact.slice(0, length - 1)}…`;

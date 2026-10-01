@@ -5,6 +5,7 @@ import remarkGfm from "remark-gfm";
 import emojiRegex from "emoji-regex";
 import type { EmojiAssets } from "./assets.js";
 import type { Theme } from "./types.js";
+import type { ImageAssets } from "./images.js";
 
 const parser = unified().use(remarkParse).use(remarkGfm);
 
@@ -13,7 +14,87 @@ type RenderContext = {
   emoji: EmojiAssets;
   foreground: string;
   keyPrefix: string;
+  images?: ImageAssets;
+  imageMaxWidth?: number;
 };
+
+function parseMarkdown(text: string): any {
+  const tree = parser.parse(text) as any;
+  const definitions = new Map<string, string>();
+  const walk = (node: any, visit: (node: any) => void) => {
+    visit(node);
+    for (const child of node.children ?? []) walk(child, visit);
+  };
+  walk(tree, (node) => { if (node.type === "definition") definitions.set(node.identifier, node.url); });
+  walk(tree, (node) => {
+    if (node.type === "imageReference" && definitions.has(node.identifier)) {
+      node.type = "image";
+      node.url = definitions.get(node.identifier);
+    }
+  });
+  return tree;
+}
+
+export function markdownImageSources(text: string): string[] {
+  const sources: string[] = [];
+  const visit = (node: any) => {
+    if (node.type === "image" && typeof node.url === "string") sources.push(node.url);
+    for (const child of node.children ?? []) visit(child);
+  };
+  visit(parseMarkdown(text));
+  return sources;
+}
+
+// Image destinations may contain large base64 payloads; they are not visible text.
+export function markdownDisplayText(text: string): string {
+  const replacements: { start: number; end: number; value: string }[] = [];
+  const visit = (node: any) => {
+    if ((node.type === "image" || node.type === "definition") && node.position) {
+      replacements.push({ start: node.position.start.offset, end: node.position.end.offset,
+        value: node.type === "image" ? `[图片${node.alt ? `：${node.alt}` : ""}]` : "" });
+    } else for (const child of node.children ?? []) visit(child);
+  };
+  visit(parseMarkdown(text));
+  let result = text;
+  for (const entry of replacements.sort((a, b) => b.start - a.start)) {
+    result = result.slice(0, entry.start) + entry.value + result.slice(entry.end);
+  }
+  return result;
+}
+
+function renderImage(node: any, context: RenderContext, key: string, maxWidth = context.imageMaxWidth ?? 1000): ReactNode {
+  const asset = context.images?.get(node.url);
+  if (!asset || !("data" in asset)) {
+    return <div key={key} style={{ display: "flex", flexDirection: "column", width: `${maxWidth}px`, maxWidth: "100%", padding: "18px", border: `1px dashed ${context.theme.border}`, borderRadius: "12px", color: context.foreground, fontSize: "18px" }}>
+      <div style={{ display: "flex", overflowWrap: "anywhere" }}>图片不可用 · {node.alt || "图片"}</div>
+      <div style={{ display: "flex", marginTop: "6px", color: context.theme.muted, fontSize: "14px" }}>{asset && "reason" in asset ? asset.reason : "图片未加载"}</div>
+    </div>;
+  }
+  const scale = Math.min(1, maxWidth / asset.width, 640 / asset.height);
+  const width = Math.max(1, Math.floor(asset.width * scale));
+  const height = Math.max(1, Math.floor(asset.height * scale));
+  return <div key={key} style={{ display: "flex", width: `${width}px`, maxWidth: "100%", borderRadius: "12px", overflow: "hidden" }}>
+    <img src={asset.data} width={width} height={height} style={{ objectFit: "contain", maxWidth: "100%" }} />
+  </div>;
+}
+
+function imageOnlyParagraph(node: any): any[] | null {
+  if (node.type !== "paragraph" || !node.children?.some((child: any) => child.type === "image")) return null;
+  return node.children.every((child: any) => child.type === "image" || (child.type === "text" && !child.value.trim()))
+    ? node.children.filter((child: any) => child.type === "image") : null;
+}
+
+function renderGallery(nodes: any[], context: RenderContext, key: string): ReactNode {
+  const width = context.imageMaxWidth ?? 1000;
+  const cellWidth = nodes.length > 1 ? Math.floor((width - 16) / 2) : width;
+  return <div key={key} style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: "16px", margin: "8px 0 16px", maxWidth: "100%" }}>
+    {nodes.map((node, index) => nodes.length > 1
+      ? <div key={`${key}-${index}`} style={{ display: "flex", width: `${cellWidth}px`, maxWidth: "100%", flexShrink: 0 }}>
+          {renderImage(node, context, `${key}-${index}-image`, cellWidth)}
+        </div>
+      : renderImage(node, context, `${key}-${index}`, cellWidth))}
+  </div>;
+}
 
 function baseText(color: string, theme: Theme): CSSProperties {
   return {
@@ -22,7 +103,7 @@ function baseText(color: string, theme: Theme): CSSProperties {
     color,
     fontFamily: theme.fontFamily,
     fontSize: `${theme.bodyFontSize}px`,
-    lineHeight: 1.58,
+    lineHeight: 1.55,
     whiteSpace: "pre-wrap",
     overflowWrap: "anywhere",
   };
@@ -146,11 +227,7 @@ function renderInline(
     case "break":
       return <Fragment key={key}>{"\n"}</Fragment>;
     case "image":
-      return (
-        <Fragment key={key}>
-          {node.alt ? `[图片：${node.alt}]` : "[图片]"}
-        </Fragment>
-      );
+      return renderImage(node, context, key);
     default:
       return <Fragment key={key}>{children}</Fragment>;
   }
@@ -209,11 +286,9 @@ function renderTable(
           style={{
             display: "flex",
             width: "100%",
-            background: native
-              ? "transparent"
-              : rowIndex === 0
-                ? context.theme.userBackground
-                : "transparent",
+            background: rowIndex === 0
+              ? native ? context.theme.codeBackground : context.theme.userBackground
+              : "transparent",
             borderTop:
               rowIndex === 0 ? "none" : `1px solid ${context.theme.border}`,
           }}
@@ -224,7 +299,7 @@ function renderTable(
               style={{
                 display: "flex",
                 width: `${100 / columns}%`,
-                padding: native ? "13px 12px 13px 0" : "11px 12px",
+                padding: native ? "13px 12px" : "11px 12px",
                 borderLeft:
                   native || cellIndex === 0
                     ? "none"
@@ -263,6 +338,7 @@ function renderBlock(
 ): ReactNode {
   switch (node.type) {
     case "paragraph":
+      if (imageOnlyParagraph(node)) return renderGallery(imageOnlyParagraph(node)!, context, key);
       return inlineContainer(node.children ?? [], context, key, {
         marginBottom: "8px",
       });
@@ -353,7 +429,7 @@ function renderBlock(
           <div
             style={{
               display: "flex",
-              color: context.theme.accent,
+              color: context.theme.muted,
               fontFamily: "IBM Plex Mono",
               fontSize: "13px",
               fontWeight: 700,
@@ -418,10 +494,23 @@ export function renderMarkdown(
   text: string,
   context: RenderContext,
 ): ReactNode[] {
-  const tree = parser.parse(text) as any;
-  return (tree.children ?? []).map((node: any, index: number) =>
-    renderBlock(node, context, `${context.keyPrefix}-${index}`),
-  );
+  const tree = parseMarkdown(text);
+  const result: ReactNode[] = [];
+  for (let index = 0; index < tree.children.length; index += 1) {
+    const node = tree.children[index];
+    const images = imageOnlyParagraph(node);
+    const key = `${context.keyPrefix}-${index}`;
+    if (images) {
+      while (index + 1 < tree.children.length) {
+        const next = imageOnlyParagraph(tree.children[index + 1]);
+        if (!next) break;
+        images.push(...next);
+        index += 1;
+      }
+      result.push(renderGallery(images, context, key));
+    } else result.push(renderBlock(node, context, key));
+  }
+  return result;
 }
 
 export function markdownFeatures(text: string): {

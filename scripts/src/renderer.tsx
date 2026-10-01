@@ -2,7 +2,9 @@ import type { CSSProperties, ReactNode } from "react";
 import satori from "satori";
 import { Resvg } from "@resvg/resvg-js";
 import { loadEmojiAssets, loadFonts } from "./assets.js";
-import { renderMarkdown } from "./markdown.js";
+import { markdownDisplayText, markdownImageSources, renderMarkdown } from "./markdown.js";
+import { answerActions, chromeIcon } from "./icons.js";
+import { loadImageAssets, type ImageAssets } from "./images.js";
 import {
   DEFAULT_EXPORT_MODE,
   DEFAULT_MOCKUP_MODE,
@@ -15,6 +17,15 @@ import {
 
 const WIDTH = 1200;
 const OUTER_PADDING = 52;
+const MAX_CANVAS_HEIGHT = 50000;
+
+function checkCanvasHeight(height: number): void {
+  if (height > MAX_CANVAS_HEIGHT) {
+    throw new Error(
+      "The selected conversation is too large for a single safe canvas. Export a smaller selection.",
+    );
+  }
+}
 
 export type RenderOptions = {
   title?: string;
@@ -26,6 +37,7 @@ export type RenderOptions = {
   content?: ContentView;
   brandName?: string;
   repository?: string;
+  imageBaseDirectory?: string;
 };
 
 function logicalLength(text: string): number {
@@ -37,7 +49,7 @@ function estimatedTextHeight(
   charsPerLine: number,
   lineHeight: number,
 ): number {
-  return text
+  return markdownDisplayText(text)
     .split("\n")
     .reduce(
       (total, line) =>
@@ -70,11 +82,7 @@ function estimateHeight(
   }
   height += 80;
   const padded = Math.ceil(height * 1.18);
-  if (padded > 50000) {
-    throw new Error(
-      "The selected conversation is too large for a single safe canvas. Export a smaller selection.",
-    );
-  }
+  checkCanvasHeight(padded);
   return Math.max(720, padded);
 }
 
@@ -100,17 +108,16 @@ function header(options: RenderOptions): ReactNode {
 
 function brandHeader(options: RenderOptions): ReactNode {
   const mode = options.mode ?? DEFAULT_EXPORT_MODE;
-  if (mode === "clean") return null;
+  if (mode !== "branded") return null;
   const { theme } = options;
-  const minimal = mode === "minimal";
   return (
     <div
       style={{
         display: "flex",
         alignItems: "center",
-        height: minimal ? "36px" : "42px",
+        height: "42px",
         borderBottom: `1px solid ${theme.border}`,
-        marginBottom: minimal ? "28px" : "32px",
+        marginBottom: "32px",
         color: theme.foreground,
       }}
     >
@@ -118,7 +125,7 @@ function brandHeader(options: RenderOptions): ReactNode {
         style={{
           display: "flex",
           fontFamily: theme.fontFamily,
-          fontSize: minimal ? "13px" : "14px",
+          fontSize: "14px",
           fontWeight: 600,
           letterSpacing: "-0.1px",
         }}
@@ -140,21 +147,23 @@ function brandFooter(options: RenderOptions): ReactNode {
       style={{
         display: "flex",
         alignItems: "center",
-        justifyContent: minimal ? "flex-end" : "space-between",
-        height: minimal ? "28px" : "32px",
-        borderTop: `1px solid ${theme.border}`,
+        justifyContent: minimal ? "center" : "space-between",
+        flexWrap: "wrap",
+        gap: "6px 12px",
+        minHeight: "32px",
+        borderTop: minimal ? "none" : `1px solid ${theme.border}`,
         color: theme.muted,
         fontFamily: theme.fontFamily,
-        fontSize: minimal ? "10px" : "11px",
-        marginTop: minimal ? "0" : "2px",
+        fontSize: "11px",
+        marginTop: minimal ? "14px" : "8px",
+        overflowWrap: "anywhere",
       }}
     >
-      {minimal ? null : (
-        <div style={{ display: "flex" }}>
-          Made with {options.brandName ?? "codex-chat-card"}
-        </div>
-      )}
-      <div style={{ display: "flex" }}>{repository}</div>
+      <div style={{ display: "flex" }}>
+        {minimal ? "" : "Made with "}{options.brandName ?? "codex-chat-card"}
+      </div>
+      {minimal ? <div style={{ display: "flex" }}>·</div> : null}
+      <div style={{ display: "flex", maxWidth: "100%" }}>{repository}</div>
     </div>
   );
 }
@@ -164,6 +173,8 @@ function roundCard(
   theme: Theme,
   emoji: Awaited<ReturnType<typeof loadEmojiAssets>>,
   content: ContentView,
+  mockup: MockupMode,
+  images: ImageAssets,
 ): ReactNode {
   const bubbleBase: CSSProperties = {
     display: "flex",
@@ -175,14 +186,14 @@ function roundCard(
   const classic = theme.layout === "classic";
   const showUser = content !== "codex";
   const showCodex = content !== "user";
+  const contentWidth = mockup === "codex-window" ? 1054 : theme.frame === "none" ? 1096 : 1006;
   return (
     <div
       key={round.turnId}
       style={{
         display: "flex",
         flexDirection: "column",
-        gap: showUser && showCodex ? (classic ? "14px" : "24px") : "0",
-        marginBottom: classic ? "32px" : "48px",
+        gap: showUser && showCodex ? (classic ? "14px" : "48px") : "0",
       }}
     >
       {showUser ? (
@@ -190,7 +201,8 @@ function roundCard(
           <div
             style={{
               ...bubbleBase,
-              width: classic ? "82%" : "78%",
+              ...(classic ? { width: "82%" } : { maxWidth: "78%" }),
+              padding: classic ? "20px 22px" : "18px 24px",
               background: theme.userBackground,
               color: theme.userForeground,
               borderRadius: classic ? "20px 20px 7px 20px" : "18px",
@@ -203,6 +215,8 @@ function roundCard(
                 emoji,
                 foreground: theme.userForeground,
                 keyPrefix: `u-${round.index}`,
+                images,
+                imageMaxWidth: Math.floor(contentWidth * (classic ? 0.82 : 0.78) - 48),
               })}
             </div>
           </div>
@@ -224,7 +238,6 @@ function roundCard(
                     display: "flex",
                     flexDirection: "column",
                     width: "100%",
-                    padding: "2px 4px",
                     color: theme.assistantForeground,
                   }
             }
@@ -235,7 +248,10 @@ function roundCard(
                 emoji,
                 foreground: theme.assistantForeground,
                 keyPrefix: `a-${round.index}`,
+                images,
+                imageMaxWidth: classic ? Math.floor(contentWidth * 0.91 - 44) : contentWidth,
               })}
+              {mockup === "codex-window" ? answerActions(theme.muted) : null}
             </div>
           </div>
         </div>
@@ -289,111 +305,28 @@ function windowBar(theme: Theme): ReactNode {
   );
 }
 
-function visibleLineCount(text: string, charsPerLine: number): number {
-  return text
-    .split("\n")
-    .reduce(
-      (total, line) =>
-        total + Math.max(1, Math.ceil(logicalLength(line) / charsPerLine)),
-      0,
-    );
-}
-
-export function waterfallBarCount(
-  rounds: ConversationRound[],
-  content: ContentView = "conversation",
-): number {
-  const visibleMessagesPerRound = content === "conversation" ? 2 : 1;
-  const visibleLines = rounds.reduce((total, round) => {
-    let roundLines = 0;
-    if (content !== "codex") roundLines += visibleLineCount(round.user, 38);
-    if (content !== "user")
-      roundLines += visibleLineCount(round.assistant, 34);
-    return total + roundLines;
-  }, 0);
-  const count = Math.round(
-    visibleLines * 0.75 + rounds.length * visibleMessagesPerRound,
-  );
-  return Math.max(6, Math.min(80, count));
-}
-
-function waterfallWidths(seed: string, count: number): number[] {
-  let state = 2166136261;
-  for (const character of seed) {
-    state ^= character.codePointAt(0) ?? 0;
-    state = Math.imul(state, 16777619);
-  }
-  return Array.from({ length: count }, (_, index) => {
-    state ^= state << 13;
-    state ^= state >>> 17;
-    state ^= state << 5;
-    const random = Math.abs(state);
-    if (index < 12) return 14 + (random % 9);
-    if (index < count - 2) return 7 + (random % 7);
-    return 8 + (random % 4);
-  });
-}
-
-function waterfallRail(theme: Theme, seed: string, count: number): ReactNode {
-  const widths = waterfallWidths(seed, count);
-  return (
-    <div
-      style={{
-        display: "flex",
-        position: "absolute",
-        left: "16px",
-        top: "50%",
-        transform: "translateY(-50%)",
-        width: "24px",
-        flexDirection: "column",
-        gap: "7px",
-        alignItems: "flex-start",
-      }}
-    >
-      {widths.map((width, index) => (
-        <div
-          key={`waterfall-${index}`}
-          style={{
-            display: "flex",
-            width: `${width}px`,
-            height: "2px",
-            borderRadius: "2px",
-            background: theme.muted,
-            opacity:
-              index >= widths.length - 2 ? 0.8 : 0.28 + (index % 4) * 0.1,
-          }}
-        />
-      ))}
-    </div>
-  );
-}
-
 function codexWindow(
   content: ReactNode,
   theme: Theme,
-  seed: string,
-  waterfallCount: number,
+  title?: string,
 ): ReactNode {
   return (
     <div
       style={{
         display: "flex",
         flexDirection: "column",
-        overflow: "hidden",
         background: theme.background,
         border: `1px solid ${theme.border}`,
-        borderRadius: "18px",
-        boxShadow: "0 18px 46px rgba(0,0,0,0.10)",
+        borderRadius: "28px",
+        boxShadow: "0 10px 30px rgba(0,0,0,0.035)",
       }}
     >
       <div
         style={{
           display: "flex",
-          alignItems: "center",
-          height: "42px",
-          padding: "0 15px",
-          borderBottom: `1px solid ${theme.border}`,
-          background: theme.codeBackground,
+          alignItems: "flex-start",
+          minHeight: "100px",
+          padding: "30px 28px 24px",
           color: theme.foreground,
         }}
       >
@@ -401,62 +334,58 @@ function codexWindow(
           style={{
             display: "flex",
             alignItems: "center",
-            gap: "7px",
-            width: "72px",
+            gap: "22px",
+            width: "196px",
+            flexShrink: 0,
+            paddingTop: "6px",
           }}
         >
-          <div
-            style={{
-              display: "flex",
-              width: "10px",
-              height: "10px",
-              borderRadius: "999px",
-              background: "#ff5f57",
-            }}
-          />
-          <div
-            style={{
-              display: "flex",
-              width: "10px",
-              height: "10px",
-              borderRadius: "999px",
-              background: "#febc2e",
-            }}
-          />
-          <div
-            style={{
-              display: "flex",
-              width: "10px",
-              height: "10px",
-              borderRadius: "999px",
-              background: "#28c840",
-            }}
-          />
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          {["#ff5f57", "#febc2e", "#28c840"].map((color) => (
+            <div
+              key={color}
+              style={{
+                display: "flex",
+                width: "14px",
+                height: "14px",
+                borderRadius: "999px",
+                background: color,
+              }}
+            />
+          ))}
+          </div>
+          <div style={{ display: "flex", gap: "20px", opacity: 0.85 }}>
+            {chromeIcon("sidebar", theme.muted)}
+            {chromeIcon("compose", theme.muted)}
+          </div>
         </div>
         <div
           style={{
             display: "flex",
             flexGrow: 1,
+            flexShrink: 1,
+            minWidth: 0,
             justifyContent: "center",
-            fontFamily: theme.fontFamily,
-            fontSize: "12px",
-            fontWeight: 600,
-            color: theme.muted,
+            textAlign: "center",
+            fontFamily: theme.titleFont,
+            fontSize: "28px",
+            fontWeight: 700,
+            lineHeight: 1.35,
+            whiteSpace: "pre-wrap",
+            overflowWrap: "anywhere",
           }}
         >
-          Codex
+          {title || "Codex"}
         </div>
-        <div style={{ display: "flex", width: "72px" }} />
+        <div style={{ display: "flex", width: "196px", flexShrink: 0 }} />
       </div>
       <div
         style={{
           display: "flex",
-          position: "relative",
           flexDirection: "column",
-          padding: "34px 36px 20px 86px",
+          padding: "22px 48px 48px",
         }}
       >
-        {waterfallRail(theme, seed, waterfallCount)}
         {content}
       </div>
     </div>
@@ -492,25 +421,6 @@ function frame(content: ReactNode, theme: Theme): ReactNode {
   );
 }
 
-function trimCanvas(svg: string): string {
-  const svgTag = svg.match(
-    /<svg[^>]*height="([0-9.]+)"[^>]*viewBox="0 0 1200 ([0-9.]+)"/,
-  );
-  const background = svg.match(
-    /<rect x="0" y="0" width="1200" height="([0-9.]+)" fill="[^"]*"(?: fill-opacity="[^"]*")?\/>/,
-  );
-  if (!svgTag || !background) return svg;
-  const [, canvasHeight, viewBoxHeight] = svgTag;
-  const [, contentHeight] = background;
-  if (Number(contentHeight) >= Number(canvasHeight)) return svg;
-  return svg
-    .replace(`height="${canvasHeight}"`, `height="${contentHeight}"`)
-    .replace(
-      `viewBox="0 0 1200 ${viewBoxHeight}"`,
-      `viewBox="0 0 1200 ${contentHeight}"`,
-    );
-}
-
 export async function renderToSvg(options: RenderOptions): Promise<string> {
   const fonts = await loadFonts();
   const emoji = await loadEmojiAssets(
@@ -519,26 +429,26 @@ export async function renderToSvg(options: RenderOptions): Promise<string> {
   const { theme } = options;
   const mockup = options.mockup ?? DEFAULT_MOCKUP_MODE;
   const contentView = options.content ?? "conversation";
+  const visibleText = options.rounds.flatMap((round) => [
+    ...(contentView !== "codex" ? [round.user] : []),
+    ...(contentView !== "user" ? [round.assistant] : []),
+  ]);
+  const images = await loadImageAssets(visibleText.flatMap(markdownImageSources), options.imageBaseDirectory);
   const content = (
     <div style={{ display: "flex", flexDirection: "column" }}>
-      {header(options)}
-      <div style={{ display: "flex", flexDirection: "column" }}>
+      {mockup === "none" ? header(options) : null}
+      <div style={{ display: "flex", flexDirection: "column", gap: theme.layout === "classic" ? "32px" : "64px" }}>
         {options.rounds.map((round) =>
-          roundCard(round, theme, emoji, contentView),
+          roundCard(round, theme, emoji, contentView, mockup, images),
         )}
       </div>
     </div>
   );
   const presentation =
     mockup === "codex-window"
-      ? codexWindow(
-          content,
-          theme,
-          options.rounds.map((round) => round.turnId).join("|"),
-          waterfallBarCount(options.rounds, contentView),
-        )
+      ? codexWindow(content, theme, options.title)
       : frame(content, theme);
-  const outerPadding = mockup === "codex-window" ? 32 : OUTER_PADDING;
+  const outerPadding = mockup === "codex-window" ? 24 : OUTER_PADDING;
   const tree = (
     <div
       style={{
@@ -556,13 +466,13 @@ export async function renderToSvg(options: RenderOptions): Promise<string> {
       {brandFooter(options)}
     </div>
   );
-  return trimCanvas(
-    await satori(tree, {
-      width: WIDTH,
-      height: estimateHeight(options.rounds, theme, mockup, contentView),
-      fonts,
-    }),
-  );
+  // Keep the early size guard, but let layout determine the actual height.
+  // A fixed estimate can clip wrapped titles or rich multi-line messages.
+  estimateHeight(options.rounds, theme, mockup, contentView);
+  const svg = await satori(tree, { width: WIDTH, fonts });
+  const height = Number(svg.match(/^<svg[^>]* height="([0-9.]+)"/)?.[1]);
+  checkCanvasHeight(height);
+  return svg;
 }
 
 export async function renderToPng(options: RenderOptions): Promise<Buffer> {

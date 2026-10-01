@@ -16,14 +16,28 @@ type PartialRound = {
   assistant: string[];
 };
 
+function imageMarkdown(source: string, alt = "图片"): string {
+  const label = alt.replace(/[\\[\]]/g, "\\$&").replace(/\s+/g, " ");
+  const url = source.replace(/</g, "%3C").replace(/>/g, "%3E").replace(/\r?\n/g, "%0A");
+  return `![${label}](<${url}>)`;
+}
+
 function textParts(content: unknown): string[] {
   if (!Array.isArray(content)) return [];
   const parts: string[] = [];
   for (const entry of content) {
     if (!entry || typeof entry !== "object") continue;
     const value = entry as Record<string, unknown>;
-    if (typeof value.text === "string" && value.text.trim())
+    if (typeof value.text === "string" && value.text.trim()) {
       parts.push(value.text.trim());
+    } else if (["image", "input_image", "image_url", "local_image", "localimage"].includes(String(value.type).toLowerCase())) {
+      const url = value.image_url && typeof value.image_url === "object"
+        ? (value.image_url as Record<string, unknown>).url : value.image_url;
+      const source = value.path ?? value.url ?? url;
+      if (typeof source === "string" && source.trim()) {
+        parts.push(imageMarkdown(source, typeof value.alt === "string" ? value.alt : "图片"));
+      }
+    }
   }
   return parts;
 }
@@ -32,13 +46,14 @@ export function sanitizeUserMessage(text: string): string {
   const hasAttachmentEnvelope = /^\s*# Files mentioned by the user:/m.test(
     text,
   );
-  if (!hasAttachmentEnvelope) return text.trim();
   const requestMarker = text.match(/^## My request:\s*$/m);
-  const request = requestMarker
+  const request = hasAttachmentEnvelope && requestMarker
     ? text.slice((requestMarker.index ?? 0) + requestMarker[0].length)
     : text;
   return request
-    .replace(/^\s*<(?:image|audio|video)\b[^>]*>\s*$/gim, "")
+    .replace(/^\s*<image\b[^>]*\bpath=(?:"([^"]+)"|'([^']+)')[^>]*>\s*$/gim,
+      (_tag, doubleQuoted: string | undefined, singleQuoted: string | undefined) => `\n${imageMarkdown(doubleQuoted ?? singleQuoted ?? "")}\n\n`)
+    .replace(/^\s*<(?:audio|video)\b[^>]*>\s*$/gim, "")
     .trim();
 }
 

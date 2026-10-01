@@ -137,7 +137,9 @@ export async function resolveLocalCodexTheme(
       dark ? 0.64 : 0.55,
       dark ? "#a5a5a5" : "#777777",
     );
-    const userBackground = dark ? mix(surface, ink, 0.12, "#2d2d2d") : ink;
+    const userBackground = mix(
+      surface, ink, dark ? 0.12 : 0.05, dark ? "#2d2d2d" : "#f3f3f3",
+    );
 
     return {
       source: "local-codex",
@@ -153,7 +155,7 @@ export async function resolveLocalCodexTheme(
         link: chromeAccent,
         listMarker: ink,
         userBackground,
-        userForeground: dark ? ink : surface,
+        userForeground: ink,
         assistantBackground: "transparent",
         assistantForeground: ink,
         border,
@@ -165,8 +167,8 @@ export async function resolveLocalCodexTheme(
         layout: "native",
         tableStyle: "native",
         fontFamily: supportedUiFont(fonts.ui),
-        bodyFontSize: bodySize * 1.375,
-        codeFontSize: codeSize * 1.215,
+        bodyFontSize: bodySize * 1.625,
+        codeFontSize: codeSize * 1.5,
         titleFont: supportedUiFont(fonts.ui),
       },
     };

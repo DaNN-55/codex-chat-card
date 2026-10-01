@@ -36,6 +36,8 @@ node scripts/run.mjs export --current --select last:2 --theme raycast-night --ou
 
 轮次选择支持 `last:N`、`all`、`2-4` 这类连续范围，以及用英文逗号分隔的编号或范围。
 
+空选择（包括只有逗号和空格的表达式）、无效编号、倒序范围或不存在的轮次会返回错误，不会创建或覆盖导出文件。
+
 一轮是“一条用户消息 + 对应的 Codex 最终回答”。轮次选择和内容视图相互独立：
 
 - `--content conversation`：保留每轮双方的内容，默认值。
@@ -55,28 +57,38 @@ node scripts/run.mjs export --current --select last:2 --theme raycast-night --ou
 展示模式：
 
 - `branded`：顶部显示 Skill 名称，底部显示署名和仓库地址。
-- `minimal`：顶部显示简洁名称，底部只显示仓库地址，默认值。
+- `minimal`：底部用一行小字显示名称和仓库地址，默认值。
 - `clean`：只显示对话内容。
 
 使用 `--brand-name` 或 `--repository` 可以覆盖显示的名称和仓库地址，不会改变对话内容。
 
 窗口外框：
 
-- `codex-window`：克制的 Codex Desktop 窗口外框，包含 macOS 窗口按钮、小标题栏、圆角边框、轻微阴影，以及随内容长度变化的左侧瀑布条，默认值。
+- `codex-window`：轻量桌面对话窗口，包含 macOS 窗口按钮、居中标题、圆角边框和极淡阴影，默认值。用户气泡随内容收缩，长消息自动换行。
 - `none`：不添加应用窗口外框。
 
 窗口外框和展示模式相互独立，`branded`、`minimal`、`clean` 都可以与 `codex-window` 组合。
 
 主题：
 
-- `local-codex`：自动默认值。从 `~/.codex/config.toml` 读取当前 Codex Desktop 的明暗外观、颜色、字体和字号，再应用 Codex 风格的 Markdown 组件规则；读取失败时回退到 `codex-ink`。
-- `codex-ink`：固定的 Codex 风格白色画布、黑色用户气泡和少量橙色强调。
+- `local-codex`：自动默认值。从 `~/.codex/config.toml` 读取当前 Codex Desktop 的明暗外观、颜色、字体和字号，再应用文字对话排版。浅色外观使用浅灰气泡与深色文字，深色外观使用深灰气泡与浅色文字；读取失败时回退到 `codex-ink`。
+- `codex-ink`：固定的白色画布、浅灰用户气泡、26px 正文和蓝色链接，表格采用浅灰表头与细分隔线。
 - `warm-editorial`：暖纸色画布、浓咖啡色用户气泡和陶土色强调。
 - `frosted-indigo`：冷蓝灰画布、靛蓝用户气泡和紫色强调。
 - `raycast-night`：近黑色画布、浅色用户气泡和珊瑚色强调。
 
-默认不显示标题或辅助标签。只有需要可见标题时才传入 `--title "..."`。
+`codex-window` 顶部默认显示 `Codex`；传入 `--title "..."` 时改为会话标题，长标题完整换行。窗口左上角带侧栏与新建会话图标，每条可见的 Codex 回答下方带复制、重试、朗读、赞、踩、分享和更多图标。这些都是 PNG/SVG 中的静态装饰。`--mockup none` 隐藏这两组图标，自定义标题显示在正文上方。画布高度根据实际内容自动伸展。
 
 省略 `--theme` 时使用 `local-codex`。传入固定主题名可以得到不受本机 Codex 设置影响的稳定外观。
 
 需要可编辑的矢量母版时使用 `--format svg`；默认格式为 PNG。
+
+## 会话图片
+
+所选轮次支持本地 PNG、JPG/JPEG 和对应的 base64 data URL。可读取消息内容数组中的 `image`、`input_image`、`image_url`、`local_image`（含 `Image`、`LocalImage`）项，以及 Markdown 图片、引用式 Markdown 图片和用户附件中的 `<image path="...">` 标记。
+
+相对图片路径以输入 JSONL 所在目录为基准。会话中的图文顺序保留；连续的图片最多两列排列，文字会分隔图片组。图片等比缩小、完整展示，透明 PNG 保留透明背景。单图显示高度最多 640px。
+
+导出仅加载所选轮次和可见角色的图片。缺失文件、不可识别格式、远程 URL、超过 20 MB 或超过 4000 万像素的图片显示带说明的占位框。远程图片请先保存为本地文件，再使用本地引用。SVG 会嵌入已加载的图片数据，移动导出文件后仍可查看。
+
+`list` 预览把图片显示为简短标签，不打印路径或 base64 数据。PDF、Office 文档、音频和视频尚不作为图片渲染。

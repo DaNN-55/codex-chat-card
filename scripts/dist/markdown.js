@@ -1,10 +1,81 @@
-import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import { jsxs as _jsxs, jsx as _jsx } from "react/jsx-runtime";
 import { Fragment } from "react";
 import { unified } from "unified";
 import remarkParse from "remark-parse";
 import remarkGfm from "remark-gfm";
 import emojiRegex from "emoji-regex";
 const parser = unified().use(remarkParse).use(remarkGfm);
+function parseMarkdown(text) {
+    const tree = parser.parse(text);
+    const definitions = new Map();
+    const walk = (node, visit) => {
+        visit(node);
+        for (const child of node.children ?? [])
+            walk(child, visit);
+    };
+    walk(tree, (node) => { if (node.type === "definition")
+        definitions.set(node.identifier, node.url); });
+    walk(tree, (node) => {
+        if (node.type === "imageReference" && definitions.has(node.identifier)) {
+            node.type = "image";
+            node.url = definitions.get(node.identifier);
+        }
+    });
+    return tree;
+}
+export function markdownImageSources(text) {
+    const sources = [];
+    const visit = (node) => {
+        if (node.type === "image" && typeof node.url === "string")
+            sources.push(node.url);
+        for (const child of node.children ?? [])
+            visit(child);
+    };
+    visit(parseMarkdown(text));
+    return sources;
+}
+// Image destinations may contain large base64 payloads; they are not visible text.
+export function markdownDisplayText(text) {
+    const replacements = [];
+    const visit = (node) => {
+        if ((node.type === "image" || node.type === "definition") && node.position) {
+            replacements.push({ start: node.position.start.offset, end: node.position.end.offset,
+                value: node.type === "image" ? `[图片${node.alt ? `：${node.alt}` : ""}]` : "" });
+        }
+        else
+            for (const child of node.children ?? [])
+                visit(child);
+    };
+    visit(parseMarkdown(text));
+    let result = text;
+    for (const entry of replacements.sort((a, b) => b.start - a.start)) {
+        result = result.slice(0, entry.start) + entry.value + result.slice(entry.end);
+    }
+    return result;
+}
+function renderImage(node, context, key, maxWidth = context.imageMaxWidth ?? 1000) {
+    const asset = context.images?.get(node.url);
+    if (!asset || !("data" in asset)) {
+        return _jsxs("div", { style: { display: "flex", flexDirection: "column", width: `${maxWidth}px`, maxWidth: "100%", padding: "18px", border: `1px dashed ${context.theme.border}`, borderRadius: "12px", color: context.foreground, fontSize: "18px" }, children: [_jsxs("div", { style: { display: "flex", overflowWrap: "anywhere" }, children: ["\u56FE\u7247\u4E0D\u53EF\u7528 \u00B7 ", node.alt || "图片"] }), _jsx("div", { style: { display: "flex", marginTop: "6px", color: context.theme.muted, fontSize: "14px" }, children: asset && "reason" in asset ? asset.reason : "图片未加载" })] }, key);
+    }
+    const scale = Math.min(1, maxWidth / asset.width, 640 / asset.height);
+    const width = Math.max(1, Math.floor(asset.width * scale));
+    const height = Math.max(1, Math.floor(asset.height * scale));
+    return _jsx("div", { style: { display: "flex", width: `${width}px`, maxWidth: "100%", borderRadius: "12px", overflow: "hidden" }, children: _jsx("img", { src: asset.data, width: width, height: height, style: { objectFit: "contain", maxWidth: "100%" } }) }, key);
+}
+function imageOnlyParagraph(node) {
+    if (node.type !== "paragraph" || !node.children?.some((child) => child.type === "image"))
+        return null;
+    return node.children.every((child) => child.type === "image" || (child.type === "text" && !child.value.trim()))
+        ? node.children.filter((child) => child.type === "image") : null;
+}
+function renderGallery(nodes, context, key) {
+    const width = context.imageMaxWidth ?? 1000;
+    const cellWidth = nodes.length > 1 ? Math.floor((width - 16) / 2) : width;
+    return _jsx("div", { style: { display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: "16px", margin: "8px 0 16px", maxWidth: "100%" }, children: nodes.map((node, index) => nodes.length > 1
+            ? _jsx("div", { style: { display: "flex", width: `${cellWidth}px`, maxWidth: "100%", flexShrink: 0 }, children: renderImage(node, context, `${key}-${index}-image`, cellWidth) }, `${key}-${index}`)
+            : renderImage(node, context, `${key}-${index}`, cellWidth)) }, key);
+}
 function baseText(color, theme) {
     return {
         display: "flex",
@@ -12,7 +83,7 @@ function baseText(color, theme) {
         color,
         fontFamily: theme.fontFamily,
         fontSize: `${theme.bodyFontSize}px`,
-        lineHeight: 1.58,
+        lineHeight: 1.55,
         whiteSpace: "pre-wrap",
         overflowWrap: "anywhere",
     };
@@ -68,7 +139,7 @@ function renderInline(node, context, key) {
         case "break":
             return _jsx(Fragment, { children: "\n" }, key);
         case "image":
-            return (_jsx(Fragment, { children: node.alt ? `[图片：${node.alt}]` : "[图片]" }, key));
+            return renderImage(node, context, key);
         default:
             return _jsx(Fragment, { children: children }, key);
     }
@@ -97,16 +168,14 @@ function renderTable(node, context, key) {
         }, children: rows.map((row, rowIndex) => (_jsx("div", { style: {
                 display: "flex",
                 width: "100%",
-                background: native
-                    ? "transparent"
-                    : rowIndex === 0
-                        ? context.theme.userBackground
-                        : "transparent",
+                background: rowIndex === 0
+                    ? native ? context.theme.codeBackground : context.theme.userBackground
+                    : "transparent",
                 borderTop: rowIndex === 0 ? "none" : `1px solid ${context.theme.border}`,
             }, children: (row.children ?? []).map((cell, cellIndex) => (_jsx("div", { style: {
                     display: "flex",
                     width: `${100 / columns}%`,
-                    padding: native ? "13px 12px 13px 0" : "11px 12px",
+                    padding: native ? "13px 12px" : "11px 12px",
                     borderLeft: native || cellIndex === 0
                         ? "none"
                         : `1px solid ${context.theme.border}`,
@@ -125,6 +194,8 @@ function renderTable(node, context, key) {
 function renderBlock(node, context, key) {
     switch (node.type) {
         case "paragraph":
+            if (imageOnlyParagraph(node))
+                return renderGallery(imageOnlyParagraph(node), context, key);
             return inlineContainer(node.children ?? [], context, key, {
                 marginBottom: "8px",
             });
@@ -171,7 +242,7 @@ function renderBlock(node, context, key) {
                     border: `1px solid ${context.theme.border}`,
                 }, children: [_jsx("div", { style: {
                             display: "flex",
-                            color: context.theme.accent,
+                            color: context.theme.muted,
                             fontFamily: "IBM Plex Mono",
                             fontSize: "13px",
                             fontWeight: 700,
@@ -204,8 +275,26 @@ function renderBlock(node, context, key) {
     }
 }
 export function renderMarkdown(text, context) {
-    const tree = parser.parse(text);
-    return (tree.children ?? []).map((node, index) => renderBlock(node, context, `${context.keyPrefix}-${index}`));
+    const tree = parseMarkdown(text);
+    const result = [];
+    for (let index = 0; index < tree.children.length; index += 1) {
+        const node = tree.children[index];
+        const images = imageOnlyParagraph(node);
+        const key = `${context.keyPrefix}-${index}`;
+        if (images) {
+            while (index + 1 < tree.children.length) {
+                const next = imageOnlyParagraph(tree.children[index + 1]);
+                if (!next)
+                    break;
+                images.push(...next);
+                index += 1;
+            }
+            result.push(renderGallery(images, context, key));
+        }
+        else
+            result.push(renderBlock(node, context, key));
+    }
+    return result;
 }
 export function markdownFeatures(text) {
     const tree = parser.parse(text);

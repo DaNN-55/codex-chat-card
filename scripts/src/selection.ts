@@ -1,4 +1,5 @@
 import type { ConversationRound } from "./types.js";
+import { markdownDisplayText } from "./markdown.js";
 
 function integer(value: string, label: string): number {
   const parsed = Number(value);
@@ -36,6 +37,8 @@ export function selectRounds(
     indexes.add(integer(token, "round number"));
   }
 
+  if (indexes.size === 0) throw new Error("Selection cannot be empty.");
+
   const missing = [...indexes].filter(
     (index) => !rounds.some((round) => round.index === index),
   );
@@ -45,7 +48,7 @@ export function selectRounds(
 }
 
 export function preview(text: string, length = 72): string {
-  const compact = text.replace(/\s+/g, " ").trim();
+  const compact = markdownDisplayText(text).replace(/\s+/g, " ").trim();
   return compact.length <= length
     ? compact
     : `${compact.slice(0, length - 1)}…`;

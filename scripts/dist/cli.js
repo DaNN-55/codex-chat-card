@@ -116,6 +116,7 @@ async function exportImage(flags) {
     const options = {
         rounds,
         theme,
+        imageBaseDirectory: dirname(document.sourcePath),
         title: stringFlag(flags, "title"),
         mode,
         mockup,
